@@ -24,7 +24,7 @@ os.environ.setdefault(路径.环境键, str(数据根))
 import 账户台账 as ledger
 import 看板服务 as service
 
-版本 = '3.0.1'
+版本 = '3.1.1'
 日志名 = '看板服务.log'
 日志上限 = 2 * 1024 * 1024
 

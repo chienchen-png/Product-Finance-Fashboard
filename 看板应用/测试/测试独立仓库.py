@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import re
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'构建'))
 from 准备仓库 import prepare
 
@@ -17,10 +18,13 @@ class RepositoryTests(unittest.TestCase):
                 self.assertTrue((target/name).is_file(),name)
             self.assertFalse(any(p.name in ('数据','投研','__pycache__') for p in target.rglob('*')))
             self.assertFalse(list(target.rglob('*.zip')))
+            for doc in target.rglob('*.md'):
+                for link in re.findall(r'\]\(([^)]+)\)',doc.read_text('utf-8')):
+                    if '://' not in link and not link.startswith('#'):self.assertTrue((doc.parent/link.split('#')[0]).exists(),(doc,link))
             source=target/'看板应用/源码'
             result=subprocess.run([sys.executable,'-c',f'import sys;sys.path.insert(0,{str(source)!r});import 启动器,看板服务,指标;print(启动器.版本)'],cwd=target,capture_output=True,text=True)
             self.assertEqual(result.returncode,0,result.stderr)
-            self.assertIn('3.0.1',result.stdout)
+            self.assertIn('3.1.1',result.stdout)
             self.assertFalse((target/'数据').exists())
 
 

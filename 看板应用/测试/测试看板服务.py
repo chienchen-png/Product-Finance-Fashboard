@@ -18,7 +18,32 @@ from urllib.parse import quote
 import 账户核心 as core
 import 账户台账 as ledger
 import 路径
-from 看板服务 import create_server, Updater, LEASE, in_session, pick_port, run_sync
+from 看板服务 import (create_server, Updater, LEASE, ashare_state, in_hk_session, in_poll_window,
+                      in_session, pick_port, run_sync)
+from datetime import datetime
+
+
+class SessionWindowTests(unittest.TestCase):
+    """A股状态与港股通刷新窗口分离：收盘后不再标A股交易中，港股通时段仍刷新。"""
+
+    def at(self, text):
+        return datetime.fromisoformat('2026-10-16T' + text + '+08:00')
+
+    def test_ashare_state_follows_phases(self):
+        self.assertEqual(ashare_state(self.at('10:00:00')), 'open')
+        self.assertEqual(ashare_state(self.at('12:00:00')), 'closed')
+        self.assertEqual(ashare_state(self.at('14:59:00')), 'open')
+        self.assertEqual(ashare_state(self.at('15:00:00')), 'closed')
+        self.assertEqual(ashare_state(self.at('15:30:00')), 'closed')
+
+    def test_hk_window_covers_afternoon_until_1600(self):
+        self.assertTrue(in_hk_session(self.at('09:05:00')))
+        self.assertFalse(in_hk_session(self.at('12:30:00')))
+        self.assertTrue(in_hk_session(self.at('15:30:00')))
+        self.assertFalse(in_hk_session(self.at('16:00:00')))
+        self.assertTrue(in_session(self.at('10:00:00')) and not in_session(self.at('15:30:00')))
+        self.assertTrue(in_poll_window(self.at('15:30:00')))
+        self.assertFalse(in_poll_window(self.at('16:30:00')))
 
 
 class SchedulerTests(unittest.TestCase):
@@ -248,6 +273,7 @@ class LocalServerTests(unittest.TestCase):
             page.goto(self.url)
             page.wait_for_function("document.getElementById('live-state').textContent==='已停止'")
             page.locator('#live-interval').select_option('20')
+            page.locator('[data-page="account"]').click()
             page.locator('#positions .pos').first.click()
             page.wait_for_selector('.kbtn[data-t="g"][data-v="day"]')
             page.locator('.kbtn[data-t="g"][data-v="day"]').first.click()

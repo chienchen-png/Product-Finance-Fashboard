@@ -86,5 +86,56 @@ class ImportTests(unittest.TestCase):
         self.assertFalse(result['errors'])
         self.assertEqual(result['changes'],[])
 
+    def test_form_four_fields_derive_exchange_name_fee_and_id(self):
+        """网页最小四项：方向、代码、数量、成交价；交易所、名称、费用、编号、时间全部联动。"""
+        m=importlib.import_module('账户录入')
+        row=dict(code='510300',side='buy',quantity=100,price='4.242',time=core.now())
+        result=m.preview_import(core.load_account(self.path),{'kind':'trades','rows':[row]})
+        self.assertFalse(result['errors'])
+        trade=result['normalized']['trades'][0]
+        self.assertEqual(trade['exchange'],'SH')
+        self.assertEqual(trade['name'],'510300')
+        self.assertEqual(trade['fee'],'0.13')
+        self.assertTrue(trade['id'].startswith('自动-'))
+        self.assertEqual(trade['confirmation'],{'execution':'confirmed','quantity':'confirmed',
+            'price':'confirmed','time':'confirmed','fee':'rule'})
+
+    def test_exchange_conflict_and_unknown_prefix_are_rejected(self):
+        m=importlib.import_module('账户录入')
+        for row in (dict(code='510300',exchange='SZ',side='buy',quantity=100,price='4.242'),
+                    dict(code='210300',side='buy',quantity=100,price='4.242')):
+            self.assertTrue(m.preview_import(core.load_account(self.path),{'kind':'trades','rows':[row]})['errors'])
+
+    def test_hk_entry_needs_rate_and_uses_hk_fee(self):
+        """港股通：5位代码自动定HK，费用按0.1257%推定，缺折算率不入账。"""
+        m=importlib.import_module('账户录入')
+        self.assertEqual(m.费用规则()['HK']['label'],'港股通0.1257%')
+        row=dict(code='00700',side='buy',quantity=100,price='417.8',fx='0.852',time=core.now())
+        result=m.preview_import(core.load_account(self.path),{'kind':'trades','rows':[row]})
+        self.assertFalse(result['errors'])
+        trade=result['normalized']['trades'][0]
+        self.assertEqual((trade['exchange'],trade['fx'],trade['amount'],trade['fee'],trade['confirmation']['fee']),
+                         ('HK','0.852','41780.00','52.52','rule'))
+        summary=core.calculate(result['normalized'])
+        self.assertEqual((summary['cash'],summary['market_value'],summary['total_assets']),
+                         ('964358.69','35596.56','999955.25'))
+        self.assertTrue(m.preview_import(core.load_account(self.path),
+            {'kind':'trades','rows':[dict(row,fx=None)]})['errors'])
+
+    def test_pending_form_appends_and_repeats_are_blocked(self):
+        m=importlib.import_module('账户录入')
+        row=dict(code='159920',side='buy',quantity=40000,price='1.418',time=core.now())
+        payload={'kind':'pending','append':True,'rows':[row]}
+        first=m.preview_import(core.load_account(self.path),payload)
+        self.assertFalse(first['errors'])
+        order=first['normalized']['pending_orders'][0]
+        self.assertEqual(order['exchange'],'SZ')
+        self.assertEqual(order['amount'],'56720.00')
+        self.assertTrue(order['id'].startswith('自动-'))
+        m.commit_import(self.path,payload,first['revision'])
+        repeat=m.preview_import(core.load_account(self.path),payload)
+        self.assertTrue(repeat['errors'])
+        self.assertEqual(len(core.load_account(self.path)['pending_orders']),1)
+
 
 if __name__=='__main__':unittest.main()

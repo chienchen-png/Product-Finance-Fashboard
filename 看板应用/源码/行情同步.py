@@ -7,6 +7,9 @@ from decimal import Decimal, InvalidOperation
 
 import 账户核心 as core
 
+# 港股持仓折算率：人民币/港币，与股票报价同批缓存。
+HK_RATE = 'FX:HKDCNY'
+
 KLINE_SOURCES = {
     'm5': 'https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={symbol},m5,,{count}',
     'm15': 'https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={symbol},m15,,{count}',
@@ -38,6 +41,9 @@ def fetch_quotes(positions):
     """共享报价路由转旧账户字段；无华泰认证时保留公开补充源。"""
     from 数据源.公共行情 import fetch_quotes as fetch_public
     keys = [p['key'] for p in positions]
+    # 港股持仓需要人民币折算率：与股票报价同批取回并写入缓存。
+    if any(p.get('exchange') == 'HK' for p in positions):
+        keys.append(HK_RATE)
     rows = fetch_public(keys)
     stamp = core.now()
     updates = {key: dict(q, requested_at=stamp, market_time=q.get('source_as_of'),
@@ -55,7 +61,8 @@ def refresh(path=core.DEFAULT):
     with core.lock(path):
         account, cache = core.load_account(path), core.load_cache(path)
         current_symbols = {position['key'] for position in core.calculate(account, cache.get('quotes', {}))['positions']}
-        cache.setdefault('quotes', {}).update({key: value for key, value in updates.items() if key in current_symbols})
+        wanted = set(current_symbols) | ({HK_RATE} if any(key.startswith('HK:') for key in current_symbols) else set())
+        cache.setdefault('quotes', {}).update({key: value for key, value in updates.items() if key in wanted})
         cache['last_quote_attempt'], cache['quote_errors'] = core.now(), errors
         core.save_cache(path, cache)
         event = '空仓估值' if not current_symbols else ('行情估值' if not errors else '行情部分更新/失败（沿用旧值）')

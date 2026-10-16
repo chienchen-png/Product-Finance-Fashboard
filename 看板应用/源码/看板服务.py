@@ -51,6 +51,40 @@ def in_session(value=None):
         for start, end in CALENDAR['poll_windows'])
 
 
+# 港股通时段（资料/赛事规则.md）：9:00—12:00、13:00—16:00，不含16:00—16:10收市竞价。
+HK_SESSIONS = (('09:00', '12:00'), ('13:00', '16:00'))
+
+
+def in_hk_session(value=None):
+    """港股通可交易时段；香港假期未核，只作刷新窗口与界面提示。"""
+    value = value or datetime.now(TZ)
+    if value.tzinfo:
+        value = value.astimezone(TZ)
+    clock = value.time().replace(tzinfo=None)
+    return is_trading_day(value.date()) is True and any(
+        daytime.fromisoformat(start) <= clock < daytime.fromisoformat(end) for start, end in HK_SESSIONS)
+
+
+def in_poll_window(value=None):
+    """行情轮询窗口＝A股与港股通并集；只决定自动刷新时机，不表示交易权限。"""
+    return in_session(value) or in_hk_session(value)
+
+
+def ashare_state(value=None):
+    """A股交易状态：按日历phases判定，与轮询窗口解耦，避免收盘后仍标交易中。"""
+    value = value or datetime.now(TZ)
+    if value.tzinfo:
+        value = value.astimezone(TZ)
+    day = is_trading_day(value.date())
+    if day is None:
+        return 'unknown'
+    if not day:
+        return 'closed'
+    clock = value.time().replace(tzinfo=None)
+    return 'open' if any(phase['active'] and daytime.fromisoformat(phase['start']) <= clock
+                         < daytime.fromisoformat(phase['end']) for phase in CALENDAR['phases']) else 'closed'
+
+
 def run_sync(path):
     return market.sync(path)
 
@@ -95,7 +129,7 @@ def pick_port(data_root, ports=None, probe_fn=None, free_fn=None):
 
 
 class Updater:
-    def __init__(self, path, runner=run_sync, clock=time.monotonic, session=in_session,
+    def __init__(self, path, runner=run_sync, clock=time.monotonic, session=in_poll_window,
                  idle_exit=IDLE_EXIT_SECONDS, startup_idle_exit=STARTUP_IDLE_EXIT_SECONDS, on_idle=None):
         self.path, self.runner, self.clock, self.session = Path(path), runner, clock, session
         self.lock = threading.RLock()
@@ -205,6 +239,9 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
     if raw.get('version') != 2:
         core.migrate(path)
     core.load_account(path)
+    import 投研缓存 as research
+    research.migrate(path)
+    research.recover(path)
     token = secrets.token_urlsafe(24)
     started_at = core.now()
     template = 路径.资源路径('看板应用/源码/账户看板模板.html').read_text(encoding='utf-8')
@@ -273,7 +310,7 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
             if not self.allowed_host():
                 return self.send_json({'error': 'forbidden'}, 403)
             if route == '/health':
-                return self.send_json({'app': APP, 'version': 3, 'pid': os.getpid(),
+                return self.send_json({'app': APP, 'version': 3, 'release': '3.1.1', 'pid': os.getpid(),
                                        'data_root': str(路径.数据根()), 'workspace': str(路径.数据根()),
                                        'started_at': started_at})
             if route == '/':
@@ -281,10 +318,10 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
                     .replace('__CHART_TAG__', '<script src="/assets/echarts.min.js"></script>') \
                     .replace('__CHART_LIBRARY__', '').replace('__LOCAL_TOKEN__', token) \
                     .replace('__LIVE_REVISION__', self.revision())
-                html = html.replace('__EXTRA_SCRIPTS__','<script src="/assets/market.js"></script><script src="/assets/entry.js"></script>')
+                html = html.replace('__EXTRA_SCRIPTS__','<script src="/assets/nav.js"></script><script src="/assets/market.js"></script><script src="/assets/research.js"></script><script src="/assets/product-analysis.js"></script><script src="/assets/entry.js"></script>')
                 return self.send_bytes(html.encode('utf-8'), 'text/html; charset=utf-8')
-            if route in ('/assets/market.js','/assets/entry.js'):
-                name = '市场看板.js' if route.endswith('market.js') else '账户录入.js'
+            if route in ('/assets/market.js','/assets/entry.js','/assets/nav.js','/assets/research.js','/assets/product-analysis.js'):
+                name = {'/assets/market.js':'市场看板.js','/assets/entry.js':'账户录入.js','/assets/nav.js':'页面导航.js','/assets/research.js':'投研看板.js','/assets/product-analysis.js':'产品分析.js'}[route]
                 body = 路径.资源路径('看板应用/源码/'+name).read_bytes()
                 return self.send_bytes(body,'text/javascript; charset=utf-8',cache='no-cache')
             if route == '/assets/echarts.min.js':
@@ -299,6 +336,12 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
             revision = self.revision()
             if route == '/api/view':
                 return self.send_json(core.view_model(path), etag='"view-' + revision + '"')
+            if route == '/api/research':
+                query=parse_qs(parsed.query)
+                try:
+                    value=research.view(path,(query.get('topic') or [None])[0],(query.get('symbol') or [None])[0],(query.get('sector') or [None])[0])
+                except (ValueError,TypeError):return self.send_json({'error':'invalid_research'},400)
+                return self.send_json(value,etag='\"research-'+hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True).encode()).hexdigest()+'\"')
             if route == '/api/market':
                 query = parse_qs(parsed.query)
                 section = (query.get('section') or ['overview'])[0]
@@ -331,6 +374,9 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
                 q = (parse_qs(parsed.query).get('q') or [''])[0][:50].casefold()
                 rows = shared_market.tracked_products(path)
                 return self.send_json({'data':[r for r in rows if q in r['symbol'].casefold() or q in r.get('name','').casefold()][:20]})
+            if route == '/api/fees':
+                # 录入表单只读展示预估计费口径；实际入账费用由账户录入按同一费率推定。
+                return self.send_json({'rules': entry_import.费用规则()})
             if route == '/api/lookup':
                 # 录入表单用：按代码取名称与最新价。只读公开行情，30秒内复用，最多缓存200项。
                 symbol = (parse_qs(parsed.query).get('symbol') or [''])[0]
@@ -406,7 +452,7 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
                             if payload.get('kind')=='watchlist':
                                 payload['expected_watchlist_revision']=core.account_revision(core.read_json(
                                     shared_market.watchlist_path(path),{'schema_version':1,'products':[]}))
-                            result = entry_import.preview_import(account,payload)
+                            result = entry_import.preview_import(account,payload,core.load_cache(path).get('quotes', {}))
                             if result['errors']:return self.send_json(result,400)
                             if len(previews)>=20:raise ValueError('预览过多，请稍后重试')
                             nonce = secrets.token_urlsafe(24)
@@ -426,6 +472,16 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
                     return self.send_json({'errors':[str(exc)]},409)
                 except (ValueError,TypeError,KeyError,OSError,ArithmeticError) as exc:
                     return self.send_json({'errors':[str(exc)]},400)
+            if self.path == '/api/research/refresh':
+                if not self.authorized():return self.send_json({'error':'forbidden'},403)
+                try:
+                    size=int(self.headers.get('Content-Length','0'))
+                    if not 2<=size<=2048 or self.headers.get_content_type()!='application/json':raise ValueError('请求格式错误')
+                    payload=json.loads(self.rfile.read(size))
+                    if not isinstance(payload,dict) or set(payload)-{'topic','symbol','sector'}:raise ValueError('仅支持主题与产品标识')
+                    value=research.engine(path).submit(payload.get('topic'),payload.get('symbol'),payload.get('sector'))
+                    return self.send_json(value,202)
+                except (ValueError,TypeError) as exc:return self.send_json({'error':str(exc)},400)
             if self.path != '/api/control' or not self.authorized():
                 return self.send_json({'error': 'forbidden'}, 403)
             try:
@@ -436,8 +492,7 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
                 updater.command(payload.get('action'), payload.get('client'), payload.get('interval', 5))
                 if payload.get('action')=='refresh':
                     shared_market.collector(path).request_refresh()
-                    import 华泰资料
-                    华泰资料.request(path)
+
                 return self.send_json(updater.state(payload.get('client')))
             except (ValueError, TypeError, json.JSONDecodeError):
                 return self.send_json({'error': 'invalid_request'}, 400)

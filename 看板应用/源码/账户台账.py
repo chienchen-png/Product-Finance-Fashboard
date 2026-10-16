@@ -19,7 +19,8 @@ import 路径
 ROOT, DEFAULT = core.ROOT, core.DEFAULT
 KLINE_SOURCES = market.KLINE_SOURCES
 # 赛事规则费用（资料/赛事规则.md）：仅佣金，沪深万3、北交所万2.8，无印花税与过户费。
-费用率 = {'SH': '0.0003', 'SZ': '0.0003', 'BJ': '0.00028'}
+费用率 = {'SH': '0.0003', 'SZ': '0.0003', 'BJ': '0.00028', 'HK': '0.001257'}
+费用标签 = {'SH': '沪深万3', 'SZ': '沪深万3', 'BJ': '北交所万2.8', 'HK': '港股通0.1257%'}
 
 # 历史演练脚本仍可从原入口取得这些纯函数。
 now, timestamp, number, money, pct = core.now, core.timestamp, core.number, core.money, core.pct
@@ -31,8 +32,10 @@ def validate_trade(raw):
     trade = {key: raw[key] for key in ('id', 'time', 'code', 'exchange', 'name', 'side', 'quantity', 'price')}
     if not isinstance(trade['id'], str) or not trade['id'].strip():
         raise ValueError('每笔成交必须有唯一id；部分成交分开编号')
-    if not re.fullmatch(r'\d{6}', str(trade['code'])) or trade['exchange'] not in ('SH', 'SZ', 'BJ'):
-        raise ValueError('股票代码须为6位字符串，交易所须为SH/SZ/BJ')
+    if trade['exchange'] not in ('SH', 'SZ', 'BJ', 'HK'):
+        raise ValueError('交易所须为SH/SZ/BJ/HK')
+    if not re.fullmatch(r'\d{5}' if trade['exchange'] == 'HK' else r'\d{6}', str(trade['code'])):
+        raise ValueError('港股代码须为5位，沪深北须为6位')
     if trade['side'] not in ('buy', 'sell') or type(trade['quantity']) is not int or trade['quantity'] <= 0:
         raise ValueError('方向须为buy/sell，数量须为正整数')
     trade['time'] = timestamp(trade['time']) if trade['time'] else None
@@ -42,6 +45,13 @@ def validate_trade(raw):
     trade['price'] = str(number(trade['price'], positive=True)) if trade['price'] is not None else None
     trade['fee'] = None if raw.get('fee') is None else money(number(raw['fee']))
     trade['amount'] = money(Decimal(trade['price']) * trade['quantity']) if trade['price'] is not None else None
+    # 港股通港币成交、人民币入账：成交时汇率必须随成交一起确认。
+    if trade['exchange'] == 'HK':
+        if raw.get('fx') in (None, ''):
+            raise ValueError('港股成交需提供人民币/港币折算率')
+        trade['fx'] = str(number(raw['fx'], positive=True))
+    else:
+        trade['fx'] = None
     if raw.get('amount') is not None and trade['amount'] is not None and money(number(raw['amount'])) != trade['amount']:
         raise ValueError('成交金额与价格×数量不一致，请核对均价精度或拆分成交')
     trade['note'] = str(raw.get('note', ''))
@@ -205,8 +215,10 @@ def validate_pending(raw):
              'status': str(raw.get('status', '待成交')), 'note': str(raw.get('note', ''))}
     if not order['id']:
         raise ValueError('每笔委托必须有唯一id')
-    if not re.fullmatch(r'\d{6}', order['code']) or order['exchange'] not in ('SH', 'SZ', 'BJ'):
-        raise ValueError('股票代码须为6位字符串，交易所须为SH/SZ/BJ')
+    if order['exchange'] not in ('SH', 'SZ', 'BJ', 'HK'):
+        raise ValueError('交易所须为SH/SZ/BJ/HK')
+    if not re.fullmatch(r'\d{5}' if order['exchange'] == 'HK' else r'\d{6}', order['code']):
+        raise ValueError('港股代码须为5位，沪深北须为6位')
     if order['side'] not in ('buy', 'sell') or type(raw.get('quantity')) is not int or order['quantity'] <= 0:
         raise ValueError('方向须为buy/sell，数量须为正整数')
     filled,remaining=raw.get('filled_quantity'),raw.get('remaining_quantity')
@@ -219,6 +231,13 @@ def validate_pending(raw):
             raise ValueError('已成与剩余数量必须合计原委托量')
         order.update(filled_quantity=filled,remaining_quantity=remaining)
     order['amount'] = money(Decimal(order['price']) * order['quantity'])
+    order['currency'] = 'HKD' if order['exchange'] == 'HK' else 'CNY'
+    if order['exchange'] == 'HK':
+        if raw.get('fx') in (None, ''):
+            raise ValueError('港股委托需提供人民币/港币折算率')
+        order['fx'] = str(number(raw['fx'], positive=True))
+    else:
+        order['fx'] = None
     order['source'] = '用户确认的手机赛事委托'
     return order
 
@@ -236,8 +255,10 @@ def pending(path, items):
     return len(normalized)
 
 
-def validate_reconciliation(account, raw):
+def validate_reconciliation(account, raw, quotes=None):
     """纯校验与报告构建，网页预览和CLI共用。"""
+    # 港股折算率：手机填写的优先，其次缓存实时汇率；都没有时港股持仓拒绝入账。
+    rate = number(raw['fx'], positive=True) if raw.get('fx') not in (None, '') else core.hk_rate(account, quotes)
     report_id = str(raw['id']).strip()
     if not report_id or any(r['id'] == report_id for r in account.get('reconciliations', [])):
         raise ValueError('对账id为空或已存在，不重复覆盖')
@@ -254,18 +275,24 @@ def validate_reconciliation(account, raw):
         summary[key] = money(value)
     if Decimal(summary['total_assets']) != Decimal(summary['market_value']) + Decimal(summary['available_cash']):
         raise ValueError('总资产必须等于总市值加现金；存在冻结请提供独立现金余额')
-    expected = {p['key']:p['quantity'] for p in core.calculate(account)['positions']}
+    expected = {p['key']:p['quantity'] for p in core.calculate(account, quotes)['positions']}
     positions, seen = [], set()
     for row in raw['positions']:
         p = {k: row[k] for k in ('code','exchange','name','quantity')}
         key = p['exchange'] + ':' + p['code']
-        if not re.fullmatch(r'\d{6}',p['code']) or p['exchange'] not in ('SH','SZ','BJ'):
+        if p['exchange'] not in ('SH','SZ','BJ','HK') or not re.fullmatch(
+                r'\d{5}' if p['exchange']=='HK' else r'\d{6}', p['code']):
             raise ValueError('对账代码或市场无效')
         if key in seen or row.get('key', key) != key or type(p['quantity']) is not int or p['quantity'] <= 0:
             raise ValueError('对账持仓重复、数量或代码无效')
         seen.add(key)
         p.update(key=key, average_cost=str(number(row['average_cost'],positive=True)),
                  price=str(number(row['price'],positive=True)))
+        unit = rate if p['exchange']=='HK' else Decimal(1)
+        if unit is None:
+            raise ValueError('港股持仓缺少人民币折算率，先刷新行情再对账')
+        p.update(currency='HKD' if p['exchange']=='HK' else 'CNY',
+                 fx=str(unit) if p['exchange']=='HK' else None)
         # 可卖数量仅供卖出审查；手机未给出时保持未知，不拿持仓总量顶替。
         available = row.get('available_quantity')
         if available is None:
@@ -282,8 +309,11 @@ def validate_reconciliation(account, raw):
     stamp = now()
     reported_at = timestamp(raw['reported_at']) if raw.get('reported_at') else None
     if reported_at and reported_at > stamp: raise ValueError('不能登记未来账户时点')
-    row_value = sum((Decimal(p['price'])*p['quantity'] for p in positions),Decimal(0))
-    display_cost = sum((Decimal(p['average_cost'])*p['quantity'] for p in positions),Decimal(0))
+    row_value, display_cost = Decimal(0), Decimal(0)
+    for p in positions:
+        unit = Decimal(p['fx']) if p.get('fx') else Decimal(1)
+        row_value += Decimal(p['price']) * p['quantity'] * unit
+        display_cost += Decimal(p['average_cost']) * p['quantity'] * unit
     report = {'id':report_id,'recorded_at':stamp,'reported_at':reported_at,
         'source':'用户口述手机全国校园模拟赛账户','source_ref':str(raw.get('source_ref','本次用户账户回报')),
         'summary':summary,'positions':positions,
@@ -350,12 +380,16 @@ def sync(path=DEFAULT, granularities=('m5', 'day'), use_quote=True):
 
 def render(path=DEFAULT):
     template = 路径.资源路径('看板应用/源码/账户看板模板.html').read_text(encoding='utf-8')
-    payload = json.dumps(core.view_model(path, include_kline=True), ensure_ascii=False).replace('<', '\\u003c')
+    import 投研缓存,市场同步
+    data=core.view_model(path, include_kline=True)
+    data['research']=投研缓存.load(path)
+    data['market_sections'].update({key:市场同步.read_section(path,key) for key in ('summary','fund_flows','huatai')})
+    payload = json.dumps(data, ensure_ascii=False).replace('<', '\\u003c')
     library = 路径.资源路径('看板应用/源码/图表依赖/echarts.min.js').read_text(encoding='utf-8').replace('</script', '<\\/script')
     html = template.replace('__ACCOUNT_DATA__', payload).replace('__CHART_TAG__', '') \
         .replace('__CHART_LIBRARY__', library).replace('__LOCAL_TOKEN__', '').replace('__LIVE_REVISION__', '')
     script = '\n'.join(路径.资源路径('看板应用/源码/'+name).read_text(encoding='utf-8')
-                       for name in ('市场看板.js','账户录入.js')).replace('</script','<\\/script')
+                       for name in ('页面导航.js','市场看板.js','投研看板.js','产品分析.js','账户录入.js')).replace('</script','<\\/script')
     html = html.replace('__EXTRA_SCRIPTS__','<script>'+script+'</script>')
     core.atomic_text(Path(path).with_name('比赛账户看板.html'), html)
 

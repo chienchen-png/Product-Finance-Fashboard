@@ -81,7 +81,16 @@ def _主流程(发布目录, 端口, 空闲, 页面保持, 用浏览器, 环境)
                 页 = 浏览器.new_page()
                 页.goto(f'http://127.0.0.1:{端口}/')
                 页.wait_for_function("document.getElementById('cash').textContent==='¥1,000,000.00'", timeout=20000)
+                页.wait_for_function("typeof ProductAnalysis!=='undefined'")
+                结果['产品分析组件']=页.evaluate("typeof ProductAnalysis.select==='function'")
+                结果['三页导航']=页.locator('#page-tabs [data-page]').all_text_contents()==['市场','投研','账户']
+                结果['默认市场']=页.locator('#market-page').is_visible()
+                页.locator('[data-page=research]').click()
+                页.wait_for_selector('#research-title')
+                结果['投研页面']=页.locator('#research-analysis').is_visible()
+                结果['投研接口']=页.evaluate("async()=>{const r=await fetch('/api/research',{headers:{'X-Dashboard-Token':localToken}});return r.status}")==200
                 结果['空持仓页面']=页.locator('#positions .pos').count()==0
+                页.locator('[data-page=account]').click()
                 页.locator('#import-open').click()
                 页.locator('#import-kind').select_option('snapshot')
                 结果['开账表单']=页.locator('#snapshot-fields').is_visible()
@@ -117,7 +126,7 @@ def _主流程(发布目录, 端口, 空闲, 页面保持, 用浏览器, 环境)
         and 结果.get('关页后退出码') == 0 and 结果.get('退出后端口释放') is True
         and 结果.get('_internal收到写入') is False
         and 结果.get('同级独立空账户') is True
-        and (not 用浏览器 or (结果.get('空持仓页面') and 结果.get('开账表单')))
+        and (not 用浏览器 or (结果.get('空持仓页面') and 结果.get('开账表单') and 结果.get('产品分析组件') and 结果.get('三页导航') and 结果.get('默认市场') and 结果.get('投研页面') and 结果.get('投研接口')))
         and '账户记录/比赛账户.json' in (结果.get('数据目录') or []))
     return 结果
 

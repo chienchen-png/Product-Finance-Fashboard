@@ -55,6 +55,26 @@ def validate_symbol(symbol):
     return symbol
 
 
+# 代码长度与前缀唯一确定交易所：5位港股通，6位沪深北。录入只需代码。
+PREFIX_EXCHANGE = (('SH', '56'), ('SZ', '013'), ('BJ', '489'))
+
+
+def exchange_of(code, exchange=None):
+    text = str(code or '').strip()
+    if re.fullmatch(r'\d{5}', text):
+        derived = 'HK'
+    elif re.fullmatch(r'\d{6}', text):
+        derived = next((name for name, prefixes in PREFIX_EXCHANGE if text[0] in prefixes), None)
+        if not derived:
+            raise ValueError('无法按代码判断交易所，请在“更多”中选择')
+    else:
+        raise ValueError('股票代码须为5位港股或6位沪深北代码')
+    given = str(exchange or '').strip().upper()
+    if given and given != derived:
+        raise ValueError(f'交易所与代码前缀不符：{text} 应为 {derived}')
+    return derived
+
+
 def decimal_text(value, *, positive=False):
     if value is None or value in ('', '-', '--'):
         return None

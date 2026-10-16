@@ -94,7 +94,7 @@ def main(argv=None):
     for name in ('start', 'health', 'show', 'refresh'):
         sub.add_parser(name)
     m = sub.add_parser('market')
-    m.add_argument('--section', choices=['overview', 'sectors', 'ranks', 'news', 'nav', 'huatai'], default='overview')
+    m.add_argument('--section', choices=['overview', 'sectors', 'ranks', 'news', 'nav', 'huatai', 'summary', 'fund_flows'], default='overview')
     m.add_argument('--product-type', choices=['stock', 'etf', 'lof'], default='stock')
     m.add_argument('--sort', choices=['up', 'down', 'amount', 'turnover'], default='up')
     m.add_argument('--symbol')
@@ -103,6 +103,8 @@ def main(argv=None):
         if name == 'kline':
             p.add_argument('--period', choices=['day', 'm5'], default='day')
             p.add_argument('--adjustment', choices=['raw', 'qfq'], default='raw')
+    for name in ('research','research-refresh'):
+        p=sub.add_parser(name);p.add_argument('--topic',choices=['market_a','overseas','capital','events','product','sector','fund']);p.add_argument('--symbol');p.add_argument('--sector')
     p = sub.add_parser('preview');p.add_argument('--input', type=Path, required=True);p.add_argument('--ticket', type=Path, required=True)
     p = sub.add_parser('commit');p.add_argument('--ticket', type=Path, required=True)
     args = parser.parse_args(argv)
@@ -135,6 +137,9 @@ def main(argv=None):
         query = {'section': args.section, 'product_type': args.product_type, 'sort': args.sort}
         if args.symbol:query['symbol'] = args.symbol
         result = client.request('/api/market?' + urlencode(query))
+    elif args.command in ('research','research-refresh'):
+        query={k:getattr(args,k) for k in ('topic','symbol','sector') if getattr(args,k) is not None}
+        result=client.request('/api/research/refresh',query) if args.command=='research-refresh' else client.request('/api/research?'+urlencode(query))
     elif args.command in ('kline', 'lookup'):
         query = {'symbol': args.symbol}
         if args.command == 'kline':query.update(period=args.period, adjustment=args.adjustment)

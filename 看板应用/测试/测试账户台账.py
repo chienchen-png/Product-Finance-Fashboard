@@ -36,6 +36,54 @@ class LedgerTests(unittest.TestCase):
         cache.setdefault('quotes', {})[key] = quote
         core.save_cache(self.path, cache)
 
+    def hk_trade(self, **changes):
+        result = dict(id='hk1', time=ledger.now(), code='00700', exchange='HK', name='腾讯控股',
+                      side='buy', quantity=100, price='417.8', fee='52.52', fx='0.852',
+                      confirmation={'quantity':'confirmed','price':'confirmed','time':'confirmed','fee':'confirmed'})
+        result.update(changes)
+        return result
+
+    def test_hk_cash_uses_trade_rate_and_requires_quote(self):
+        """港股通港币成交、人民币入账：现金用成交汇率，市值用最新汇率，均价保持港币。"""
+        ledger.record(self.path, self.hk_trade())
+        facts = ledger.load(self.path)['trades'][0]
+        self.assertEqual((facts['amount'], facts['fx']), ('41780.00', '0.852'))
+        summary = core.calculate(ledger.load(self.path))
+        self.assertEqual((summary['cash'], summary['market_value'], summary['total_assets']),
+                         ('964358.69', '35596.56', '999955.25'))
+        self.assertEqual(summary['hk_rate']['rate'], '0.852')
+        position = summary['positions'][0]
+        # 均价含费且按港币显示，与手机成本价口径一致。
+        self.assertEqual((position['currency'], position['fx'], position['average_cost']),
+                         ('HKD', '0.852', '418.3252'))
+        with self.assertRaises(ValueError):
+            ledger.record(self.path, self.hk_trade(id='hk2', fx=None))
+        with self.assertRaises(ValueError):
+            ledger.record(self.path, self.hk_trade(id='hk3', code='700'))
+
+    def test_hk_market_value_follows_live_rate_not_trade_rate(self):
+        ledger.record(self.path, self.hk_trade())
+        self.set_quote('FX:HKDCNY', '0.870')
+        self.set_quote('HK:00700', '430')
+        summary = core.calculate(ledger.load(self.path), core.load_cache(self.path)['quotes'])
+        self.assertEqual(summary['market_value'], '37410.00')
+        self.assertEqual(summary['cash'], '964358.69')
+        position = summary['positions'][0]
+        self.assertEqual((position['price'], position['average_cost'], position['fx']), ('430', '418.3252', '0.870'))
+
+    def test_hk_snapshot_needs_rate_and_values_in_cny(self):
+        self.set_quote('FX:HKDCNY', '0.870')
+        raw = dict(id='手机-1', reported_at=None,
+                   summary=dict(total_assets='1000000', market_value='43000', available_cash='957000'),
+                   positions=[dict(code='00700', exchange='HK', name='腾讯控股', quantity=100,
+                                   average_cost='417.8', price='430')])
+        report = ledger.validate_reconciliation(core.load_account(self.path), raw,
+                                                core.load_cache(self.path)['quotes'])
+        self.assertEqual((report['positions'][0]['fx'], report['checks']['row_market_value']),
+                         ('0.870', '37410.00'))
+        with self.assertRaises(ValueError):
+            ledger.validate_reconciliation(core.load_account(self.path), raw, {})
+
     def test_facts_keep_only_confirmed_records(self):
         ledger.record(self.path, self.trade())
         facts = ledger.load(self.path)

@@ -14,7 +14,7 @@ from 数据源 import 公共行情 as public, 东方财富 as east
 from 数据契约 import product_meta, normalize_cached_series
 from zoneinfo import ZoneInfo
 
-SECTIONS={'overview','ranks','sectors','flows','news','nav','announcements','huatai'}
+SECTIONS={'summary','fund_flows','overview','ranks','sectors','flows','news','nav','announcements','huatai'}
 _engines={}
 _engine_lock=threading.Lock()
 _cache_write_lock=threading.RLock()
@@ -61,10 +61,7 @@ def market_state(symbol=None, at=None):
         # 仅供调度的已知开闭市时钟；海外日历仍未验证，不代表可交易权限。
         return 'open' if local.weekday()<5 and (9,30)<=(local.hour,local.minute)<(meta['close_hour'],0) else 'closed'
     import 看板服务
-    day=看板服务.is_trading_day(at.astimezone(TZ).date())
-    if day is None:return 'unknown'
-    if day and 看板服务.in_session(at):return 'open'
-    return 'closed'
+    return 看板服务.ashare_state(at)
 
 
 def session_key(symbol=None,at=None):
@@ -87,6 +84,15 @@ def unavailable(section, reason='尚未获取'):
 
 def read_section(data_root, section):
     path=account_path(data_root)
+    if section=='huatai':
+        import 投研缓存
+        return 投研缓存.legacy(path)
+    if section=='summary':
+        from 市场摘要 import build
+        return build(read_section(path,'overview'),read_section(path,'sectors:industry'),core.load_cache(path).get('series',{}))
+    if section=='fund_flows':
+        import 华泰资料
+        return 华泰资料.funds(path) if hasattr(华泰资料,'funds') else unavailable(section)
     try:raw=core.read_json(market_path(path), {'sections':{}})
     except ValueError:return unavailable(section,'缓存损坏，等待后台重建')
     ds=raw.get('sections',{}).get(section)
@@ -142,7 +148,7 @@ class Collector:
     @staticmethod
     def kline_periods(symbol):
         if symbol.startswith(('SH:','SZ:','BJ:')):return ('day','m5')
-        return ('day',) if symbol in public.TX_GLOBAL else ()
+        return ('day',) if symbol in public.TX_GLOBAL or symbol.startswith('HK:') else ()
 
     def kline_state(self,symbol,period='day',adjustment='raw',entry=None):
         if period not in self.kline_periods(symbol) or (adjustment=='qfq' and not symbol.startswith(('SH:','SZ:','BJ:'))):

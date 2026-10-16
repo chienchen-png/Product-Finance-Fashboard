@@ -110,7 +110,7 @@ def parse_tencent(text, symbols):
 
 def parse_sina(text, symbols):
     wanted={s.split(':')[0].lower()+s.split(':')[1]:s for s in symbols if s.startswith(('SH:','SZ:','BJ:','HK:'))}
-    wanted.update({'fx_susdcny':'FX:USDCNY','hf_GC':'FUT:GC'})
+    wanted.update({'fx_susdcny':'FX:USDCNY','fx_shkdcny':'FX:HKDCNY','hf_GC':'FUT:GC'})
     out={}
     for code,raw in re.findall(r'hq_str_([A-Za-z0-9_$]+)="([^"\r\n]*)";',text):
         symbol=wanted.get(code)
@@ -124,7 +124,7 @@ def parse_sina(text, symbols):
                     bid1=num(v[6]),ask1=num(v[7]),
                     change_pct=num(Decimal(v[3])/Decimal(prev)-1) if prev else None)
                 stamp=v[30]+'T'+v[31]+'+08:00'
-            elif code=='fx_susdcny':
+            elif code.startswith('fx_'):
                 q=quote(symbol,v[9],v[8]);q.update(prev_close=num(v[3]),open=num(v[5]),
                     high=num(v[6]),low=num(v[7]),change_pct=ratio(v[10]),reference_note=v[13])
                 stamp=v[17]+'T'+v[0]+'+08:00'
@@ -278,6 +278,9 @@ def fetch(kind, params):
             url=f'https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={key},m5,,{count}'
         node=get_json(url)['data'][key]
         raw=node.get('qfqday') if period=='day' and adjustment=='qfq' else node.get(period)
+        if not raw and period=='day' and key.startswith(('hk','us')):
+            # 港美日线只有前复权：取到就标注复权口径，不用原始价冒充。
+            raw=node.get('qfqday');adjustment='qfq'
         if not raw:raise ValueError('K线缺失或复权模式不符')
         amounts={}
         if period=='day' and symbol.startswith(('SH:','SZ:')):

@@ -39,7 +39,8 @@ class MarketBrowserTests(unittest.TestCase):
                     page.route('**/*',lambda r:r.continue_() if r.request.url.startswith('http://127.0.0.1:') else r.abort())
                     page.goto(f'http://127.0.0.1:{server.server_port}/');page.locator('[data-page="market"]').click()
                     page.wait_for_selector('#rank-rows [data-product="SH:600010"]')
-                    self.assertFalse(page.locator('#index-strip').is_visible())
+                    self.assertTrue(page.locator('#index-strip').is_visible())
+                    self.assertEqual(page.locator('#index-strip [data-product]').count(),2)
                     self.assertFalse(page.locator('#sector-panel').is_visible())
                     self.assertFalse(page.locator('#news-panel').is_visible())
                     page.locator('#rank-rows [data-product="SH:600010"]').click()
@@ -89,7 +90,7 @@ class MarketBrowserTests(unittest.TestCase):
             fixtures['sectors:industry']['data'][-1]['change_pct']=None
             fixtures['news']['data'] += [dict(fixtures['news']['data'][0],id=f'n{i}',title=f'市场快讯{i}') for i in range(99)]
             for k,v in fixtures.items():market._store_section(p,k,v)
-            market._store_section(p,'huatai',dataset('huatai',[dict(id='indicators',title='技术指标与产品资金',
+            market._store_section(p,'huatai',dataset('huatai',[dict(id='events',title='宏观事件',
                 answer='### 华泰样本\n| 指标 | 数值 |\n| --- | --- |\n| RSI | 58 |\n<script>不执行</script>',retrieved_at=now)],'华泰Skill',status='unknown'))
             cache=core.load_cache(p)
             cache['series']={'SH:510300':{'name':'测试产品','day':dict(bars=[['2026-10-14','4.2','4.242','4.3','4.1','100','424']],columns=['time','open','close','high','low','volume','amount'],adjustment='raw',volume_unit='shares',amount_unit='CNY')}}
@@ -112,10 +113,11 @@ class MarketBrowserTests(unittest.TestCase):
                     self.assertGreater(page.locator('#sector-panel').bounding_box()['width'],page.locator('#rank-panel').bounding_box()['width']*1.5)
                     self.assertIn('纳斯达克100',page.locator('#index-strip').inner_text())
                     self.assertEqual(page.locator('#flow-chart').count(),0)
-                    self.assertTrue(page.locator('#huatai-panel').is_visible())
-                    page.locator('#huatai-docs summary').click()
-                    self.assertEqual(page.locator('#huatai-docs table').count(),1)
+                    page.locator('[data-page="research"]').click()
+                    page.locator('#research-list button').first.click()
+                    page.wait_for_selector('#huatai-docs table')
                     self.assertEqual(page.locator('#huatai-docs script').count(),0)
+                    page.locator('[data-page="market"]').click()
                     self.assertEqual(page.locator('#sector-type option[value="concept"]').count(),0)
                     page.wait_for_function("document.getElementById('sector-rows').textContent.includes('测试板块')")
                     map_height=page.locator('#sector-panel').bounding_box()['height']
@@ -130,16 +132,15 @@ class MarketBrowserTests(unittest.TestCase):
                     box=page.locator('#sector-map').bounding_box()
                     page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2)
                     page.wait_for_function("document.getElementById('sector-map').textContent.includes('成分数量')")
-                    page.evaluate("document.getElementById('rank-scroll').scrollTop=150;document.getElementById('news-list').scrollTop=120")
+                    page.evaluate("document.getElementById('rank-scroll').scrollTop=150")
                     # 即使真实数据变化导致重绘，保留读者的位置。
                     fixtures['ranks:stock:up']['data'][1]['price']='4.25'
                     fixtures['news']['data'][1]['title']='更新后的市场快讯'
                     market._store_section(p,'ranks:stock:up',fixtures['ranks:stock:up'])
                     market._store_section(p,'news',fixtures['news'])
                     page.evaluate("MarketDashboard.update()")
-                    page.wait_for_function("document.getElementById('news-list').textContent.includes('更新后的市场快讯')")
+                    page.wait_for_function("document.getElementById('rank-rows').textContent.includes('4.25')")
                     self.assertEqual(page.evaluate("document.getElementById('rank-scroll').scrollTop"),150)
-                    self.assertEqual(page.evaluate("document.getElementById('news-list').scrollTop"),120)
                     page.locator('#sector-view').select_option('table')
                     page.wait_for_selector('#sector-table',state='visible')
                     self.assertAlmostEqual(map_height,page.locator('#sector-panel').bounding_box()['height'],delta=1)
@@ -160,8 +161,12 @@ class MarketBrowserTests(unittest.TestCase):
                         cards=page.locator('#index-strip .index-card')
                         self.assertAlmostEqual(cards.last.bounding_box()['x']+cards.last.bounding_box()['width'],page.locator('#index-strip').bounding_box()['x']+page.locator('#index-strip').bounding_box()['width'],delta=2)
                     page.set_viewport_size({'width':1440,'height':1100})
+                    page.locator('[data-page=research]').click()
+                    page.locator('[data-research-view=news]').click()
+                    page.wait_for_selector('#news-list .news-item')
                     self.assertEqual(page.locator('#news-list script').count(),0)
                     self.assertIn('<script>',page.locator('#news-list').inner_text())
+                    page.locator('[data-page=market]').click()
                     page.locator('#rank-rows tr').first.click()
                     page.wait_for_function("document.getElementById('kb-market').textContent.includes('日线')")
                     # 无数据的周期不显示按钮；打开产品会自动补数，取到数据后才出现按钮。

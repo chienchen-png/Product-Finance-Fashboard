@@ -226,10 +226,41 @@ def trade_digest(trades):
                                     separators=(',', ':')).encode('utf-8')).hexdigest()
 
 
+def hk_rate(account, quotes=None):
+    """人民币/港币折算率：优先缓存实时汇率，其次最近一笔港股成交汇率；都无则None。"""
+    quote = (quotes or {}).get('FX:HKDCNY') or {}
+    value = quote.get('price')
+    if value not in (None, ''):
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            pass
+    for trade in reversed(account.get('trades', [])):
+        if trade.get('exchange') == 'HK' and trade.get('fx'):
+            try:
+                return Decimal(str(trade['fx']))
+            except (InvalidOperation, TypeError, ValueError):
+                return None
+    return None
+
+
+def trade_rate(trade):
+    """成交折算率：港股按成交时汇率换人民币，其他市场为1；缺汇率的港股成交记为未知。"""
+    if trade.get('exchange') != 'HK':
+        return Decimal(1)
+    if not trade.get('fx'):
+        return None
+    try:
+        return Decimal(str(trade['fx']))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
 def calculate(account, quotes=None, at=None):
     """按已登记的因果顺序计算；未知成交字段只影响依赖它的金额。"""
     quotes = quotes or {}
     instant = at or datetime.now(TZ)
+    hk_now = hk_rate(account, quotes)
     initial = number(account['initial_cash'], positive=True)
     cash, realized = initial, Decimal(0)
     holdings, unknown_fees, missing, seen = {}, [], [], set()
@@ -246,7 +277,10 @@ def calculate(account, quotes=None, at=None):
         realized = None  # 手机未报告已实现盈亏；不同费用口径的汇总差值不能代替它。
         holdings = {}
         for p in report['positions']:
-            holdings[p['key']] = dict(p, cost=Decimal(p['average_cost']) * p['quantity'],
+            rate = (Decimal(p['fx']) if p.get('fx') else hk_now) if p['exchange'] == 'HK' else Decimal(1)
+            holdings[p['key']] = dict(p, cost=(Decimal(p['average_cost']) * p['quantity'] * rate
+                                               if rate is not None else None),
+                cost_hkd=(Decimal(p['average_cost']) * p['quantity'] if p['exchange'] == 'HK' else None),
                 last_price=p['price'], last_trade_time=report['recorded_at'],
                 last_price_source='用户手机回报（行情时点未提供）', cost_basis='手机显示均价，逐项盈亏为估算')
         reported_profit = report['summary'].get('unrealized_profit')
@@ -271,6 +305,12 @@ def calculate(account, quotes=None, at=None):
         holding = holdings.setdefault(key, {'code': trade['code'], 'exchange': trade['exchange'],
                                             'name': trade['name'], 'quantity': 0, 'cost': Decimal(0)})
         amount, fee = decimal(trade.get('amount')), decimal(trade.get('fee'))
+        native_cost, native_proceeds = add(amount, fee), add(amount, -fee if fee is not None else None)
+        rate = trade_rate(trade)
+        if rate != Decimal(1):
+            # 港股成交按成交时汇率折成人民币入账；缺汇率时金额与费用按未知处理。
+            amount = amount * rate if amount is not None and rate is not None else None
+            fee = fee * rate if fee is not None and rate is not None else None
         if fee is None:
             unknown_fees.append(trade['id'])
         for field in ('price', 'fee', 'time'):
@@ -280,12 +320,18 @@ def calculate(account, quotes=None, at=None):
             cost = add(amount, fee)
             cash = add(cash, -cost if cost is not None else None)
             holding['cost'] = add(holding['cost'], cost)
+            if holding['exchange'] == 'HK':
+                # 港币成本单独留一份，持仓均价按港币显示，不随汇率变动。
+                holding['cost_hkd'] = add(holding.get('cost_hkd', Decimal(0)), native_cost)
             holding['quantity'] += trade['quantity']
         else:
             if holding['quantity'] < trade['quantity']:
                 raise ValueError('卖出数量超过此前已确认持仓')
             removed = holding['cost'] * Decimal(trade['quantity']) / holding['quantity'] if holding['cost'] is not None else None
             holding['cost'] = add(holding['cost'], -removed if removed is not None else None)
+            if holding['exchange'] == 'HK' and holding.get('cost_hkd') is not None:
+                removed_hkd = holding['cost_hkd'] * Decimal(trade['quantity']) / holding['quantity']
+                holding['cost_hkd'] = add(holding['cost_hkd'], -removed_hkd)
             holding['quantity'] -= trade['quantity']
             proceeds = add(amount, -fee if fee is not None else None)
             cash = add(cash, proceeds)
@@ -331,15 +377,20 @@ def calculate(account, quotes=None, at=None):
         else:
             price, price_time, source = decimal(holding['last_price']), holding['last_trade_time'], holding.get('last_price_source', '成交价参考（待刷新）')
             extras['quote_state'] = 'trade_fallback' if price is not None else 'missing'
-        value = price * quantity if price is not None else None
+        rate = hk_now if holding['exchange'] == 'HK' else Decimal(1)
+        value = price * quantity * rate if price is not None and rate is not None else None
         profit = value - holding['cost'] if value is not None and holding['cost'] is not None else None
+        average_cost = (pct(holding['cost_hkd'] / quantity) if holding.get('cost_hkd') is not None else
+                        (pct(holding['cost'] / quantity) if holding['cost'] is not None else None))
         market_value = add(market_value, value)
         positions.append({'key': key, 'code': holding['code'], 'exchange': holding['exchange'],
                           'name': holding['name'], 'quantity': quantity, 'cost': money(holding['cost']),
                           'available_quantity': (holding.get('available_quantity')
                                                  if isinstance(holding.get('available_quantity'), int)
                                                  and 0 <= holding['available_quantity'] <= quantity else None),
-                          'average_cost': pct(holding['cost'] / quantity) if holding['cost'] is not None else None,
+                          'average_cost': average_cost,
+                          'currency': 'HKD' if holding['exchange'] == 'HK' else 'CNY',
+                          'fx': str(rate) if holding['exchange'] == 'HK' and rate is not None else None,
                           'price': str(price) if price is not None else None,
                           'market_value': money(value), 'profit': money(profit),
                           'return_pct': pct(profit / holding['cost'] * 100) if profit is not None and holding['cost'] else None,
@@ -371,7 +422,12 @@ def calculate(account, quotes=None, at=None):
             'basis':'手机对账基线' if using_report else '手机现金基线＋持仓行情估值'}
         if total is not None and rs.get('daily_profit') is not None and instant.astimezone(TZ).date().isoformat() == report['recorded_at'][:10]:
             daily_profit = money(Decimal(rs['daily_profit']) + total - Decimal(rs['total_assets']))
+    hk_quote = (quotes or {}).get('FX:HKDCNY') or {}
+    hk = ({'rate': str(hk_now), 'source': hk_quote.get('source'), 'as_of': hk_quote.get('source_as_of'),
+           'source_time_kind': hk_quote.get('source_time_kind')}
+          if any(p['exchange'] == 'HK' for p in positions) else None)
     return {'cash': money(cash), 'market_value': money(market_value), 'total_assets': money(total),
+            'hk_rate': hk,
             'profit': money(total - initial) if total is not None else None,
             'return_pct': pct((total / initial - 1) * 100) if total is not None else None,
             'realized_profit': money(realized),
