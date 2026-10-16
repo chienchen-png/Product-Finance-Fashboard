@@ -11,20 +11,16 @@ from unittest.mock import patch
 
 
 class ResolveTests(unittest.TestCase):
-    def test_standalone_source_uses_same_data_as_root_exe(self):
+    def test_source_roots_follow_application_root(self):
+        """源码态数据根＝应用根/数据、资源根＝应用根：本人项目为`看板应用`，独立仓库为仓库根。"""
         import 路径
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);(root/'比赛看板.exe').write_bytes(b'marker')
-            with patch.dict(os.environ,{},clear=True),patch.object(路径,'项目根',return_value=root),patch.object(路径,'打包态',return_value=False):
-                self.assertEqual(路径.数据根(),root/'数据')
-            self.assertFalse((root/'数据').exists())
-
-    def test_personal_source_keeps_personal_application_data(self):
-        import 路径
-        with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);app=root/'看板应用';app.mkdir();(app/'比赛看板.exe').write_bytes(b'marker')
-            with patch.dict(os.environ,{},clear=True),patch.object(路径,'项目根',return_value=root),patch.object(路径,'应用根',return_value=app),patch.object(路径,'打包态',return_value=False):
-                self.assertEqual(路径.数据根(),app/'数据')
+            for app in (Path(folder),Path(folder)/'看板应用'):
+                app.mkdir(parents=True,exist_ok=True);(app/'比赛看板.exe').write_bytes(b'marker')
+                with patch.dict(os.environ,{},clear=True),patch.object(路径,'应用根',return_value=app),patch.object(路径,'打包态',return_value=False):
+                    self.assertEqual(路径.数据根(),app/'数据')
+                    self.assertEqual(路径.资源根(),app)
+                self.assertFalse((app/'数据').exists())
     def test_env_wins_over_packaging(self):
         import 路径
         with tempfile.TemporaryDirectory() as folder:

@@ -8,6 +8,9 @@ import subprocess
 import tempfile
 import unittest
 
+应用根 = Path(__file__).resolve().parents[1]
+读我来源 = next(p for p in (应用根/'构建/发布说明.md',应用根/'README.md') if p.is_file())
+
 
 class BuildTests(unittest.TestCase):
     def test_running_package_is_rejected_before_build_or_move(self):
@@ -32,7 +35,7 @@ function python { throw '不应进入打包器' }
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);tools=root/'看板应用/构建';tools.mkdir(parents=True)
             shutil.copy2((Path(__file__).resolve().parents[1]/'构建/构建发布.ps1'),tools/'构建发布.ps1')
-            shutil.copy2((Path(__file__).resolve().parents[1]/'构建/发布说明.md'),tools/'发布说明.md')
+            shutil.copy2(读我来源,tools/'发布说明.md')
             package=root/'看板应用';(package/'_internal').mkdir(parents=True)
             (package/'_internal/old.dll').write_bytes(b'old runtime')
             (package/'比赛看板.exe').write_bytes(b'old exe')
@@ -71,7 +74,7 @@ function python {
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);tools=root/'看板应用/构建';tools.mkdir(parents=True)
             shutil.copy2((Path(__file__).resolve().parents[1]/'构建/构建发布.ps1'),tools/'构建发布.ps1')
-            shutil.copy2((Path(__file__).resolve().parents[1]/'构建/发布说明.md'),tools/'发布说明.md')
+            shutil.copy2(读我来源,tools/'发布说明.md')
             package=root/'看板应用';(package/'_internal').mkdir(parents=True)
             (package/'_internal/old.dll').write_text('old runtime');(package/'比赛看板.exe').write_text('old exe')
             wrapper=root/'run.ps1'

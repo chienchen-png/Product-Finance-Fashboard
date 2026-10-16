@@ -17,7 +17,7 @@ import zipfile
 import 路径
 
 ROOT = 路径.数据根()
-MANIFEST = 路径.资源路径('看板应用/资源/官方技能版本清单.json')
+MANIFEST = 路径.资源路径('资源/官方技能版本清单.json')
 SKILL_ROOTS = (Path.home() / '.agents/skills', Path.home() / '.codex/skills')
 
 

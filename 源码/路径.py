@@ -24,10 +24,10 @@ def 打包态():
 
 
 def 资源根():
-    """内嵌资源目录：打包态取解包目录，源码态取项目根。"""
+    """内嵌资源目录：打包态取解包目录，源码态取应用根（本人项目为`看板应用`，独立仓库为仓库根）。"""
     if hasattr(sys, '_MEIPASS'):
         return Path(sys._MEIPASS)
-    return 项目根()
+    return 应用根()
 
 
 def 解析数据根(环境值=None, 打包=None, exe目录=None, 源码根目录=None):
@@ -50,9 +50,7 @@ def 数据根():
     override = os.environ.get(环境键)
     if override:
         return Path(override).expanduser()
-    # 独立源码仓库与其根目录EXE使用同一份本机数据；本人项目源码使用应用目录数据。
-    if not 打包态() and (项目根()/'比赛看板.exe').is_file():
-        return 项目根()/'数据'
+    # 源码态与同级EXE共用应用目录数据；打包态只看EXE同级。
     return 解析数据根(None, 源码根目录=应用根())
 
 

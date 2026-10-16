@@ -1,7 +1,8 @@
 param([ValidateSet('本机','独立')][string]$目标 = '本机')
 $ErrorActionPreference = 'Stop'
 $应用根 = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
-$项目根 = [IO.Path]::GetFullPath((Split-Path -Parent $应用根))
+# 独立仓库的源码位于仓库根，应用根即项目根；本人项目应用位于子目录，项目根为上一级。
+$项目根 = if (Test-Path -LiteralPath (Join-Path $应用根 'requirements.txt')) { $应用根 } else { [IO.Path]::GetFullPath((Split-Path -Parent $应用根)) }
 Set-Location -LiteralPath $项目根
 function 核项目内路径([string] $路径) {
     $绝对 = [IO.Path]::GetFullPath($路径)
@@ -34,7 +35,9 @@ $新包 = 核项目内路径 (Join-Path $暂存 'dist/比赛看板')
 foreach ($名称 in @('比赛看板.exe','_internal')) {
     if (-not (Test-Path -LiteralPath (Join-Path $新包 $名称))) { throw "新包缺少$名称；原包未改变" }
 }
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot '发布说明.md') -Destination (Join-Path $新包 'README.md') -Force
+$读我 = Join-Path $产物 'README.md'
+if (-not (Test-Path -LiteralPath $读我)) { $读我 = Join-Path $PSScriptRoot '发布说明.md' }
+Copy-Item -LiteralPath $读我 -Destination (Join-Path $新包 'README.md') -Force
 python (Join-Path $应用根 '测试/验收发布包.py') --发布目录 $新包 --端口 8778 --空闲 5 --页面保持 8
 if ($LASTEXITCODE -ne 0) { throw '新EXE验收失败；原包未改变' }
 确认旧看板未占用

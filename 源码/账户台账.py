@@ -379,16 +379,16 @@ def sync(path=DEFAULT, granularities=('m5', 'day'), use_quote=True):
 
 
 def render(path=DEFAULT):
-    template = 路径.资源路径('看板应用/源码/账户看板模板.html').read_text(encoding='utf-8')
+    template = 路径.资源路径('源码/账户看板模板.html').read_text(encoding='utf-8')
     import 投研缓存,市场同步
     data=core.view_model(path, include_kline=True)
     data['research']=投研缓存.load(path)
     data['market_sections'].update({key:市场同步.read_section(path,key) for key in ('summary','fund_flows','huatai')})
     payload = json.dumps(data, ensure_ascii=False).replace('<', '\\u003c')
-    library = 路径.资源路径('看板应用/源码/图表依赖/echarts.min.js').read_text(encoding='utf-8').replace('</script', '<\\/script')
+    library = 路径.资源路径('源码/图表依赖/echarts.min.js').read_text(encoding='utf-8').replace('</script', '<\\/script')
     html = template.replace('__ACCOUNT_DATA__', payload).replace('__CHART_TAG__', '') \
         .replace('__CHART_LIBRARY__', library).replace('__LOCAL_TOKEN__', '').replace('__LIVE_REVISION__', '')
-    script = '\n'.join(路径.资源路径('看板应用/源码/'+name).read_text(encoding='utf-8')
+    script = '\n'.join(路径.资源路径('源码/'+name).read_text(encoding='utf-8')
                        for name in ('页面导航.js','市场看板.js','投研看板.js','产品分析.js','账户录入.js')).replace('</script','<\\/script')
     html = html.replace('__EXTRA_SCRIPTS__','<script>'+script+'</script>')
     core.atomic_text(Path(path).with_name('比赛账户看板.html'), html)

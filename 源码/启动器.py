@@ -10,7 +10,7 @@ import threading
 import webbrowser
 
 if getattr(sys, 'frozen', False):
-    工具目录 = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent)) / '看板应用/源码'
+    工具目录 = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent)) / '源码'
 else:
     工具目录 = Path(__file__).resolve().parent
 if str(工具目录) not in sys.path:

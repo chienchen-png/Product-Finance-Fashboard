@@ -515,7 +515,7 @@ def view_model(path=DEFAULT, include_kline=False):
         'pending_orders': account.get('pending_orders', []),
         'snapshots': nav.get('observations', []),
         'quote_errors': cache.get('quote_errors', []),
-        'market_calendar': read_json(路径.资源路径('看板应用/资源/A股交易日历.json'))
+            'market_calendar': read_json(路径.资源路径('资源/A股交易日历.json'))
 }
     if include_kline:
         import 市场同步

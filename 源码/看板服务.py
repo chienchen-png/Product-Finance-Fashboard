@@ -30,7 +30,7 @@ APP = 'competition-dashboard-v3.0.1'
 LEASE = 180
 IDLE_EXIT_SECONDS = 300
 STARTUP_IDLE_EXIT_SECONDS = 600
-CALENDAR = core.read_json(路径.资源路径('看板应用/资源/A股交易日历.json'))
+CALENDAR = core.read_json(路径.资源路径('资源/A股交易日历.json'))
 lookup_cache = {}  # 录入表单名称查询的短缓存：symbol -> (monotonic, quote)
 
 
@@ -244,8 +244,8 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
     research.recover(path)
     token = secrets.token_urlsafe(24)
     started_at = core.now()
-    template = 路径.资源路径('看板应用/源码/账户看板模板.html').read_text(encoding='utf-8')
-    chart_file = 路径.资源路径('看板应用/源码/图表依赖/echarts.min.js')
+    template = 路径.资源路径('源码/账户看板模板.html').read_text(encoding='utf-8')
+    chart_file = 路径.资源路径('源码/图表依赖/echarts.min.js')
     chart_bytes = chart_file.read_bytes()
     chart_etag = '"' + hashlib.sha256(chart_bytes).hexdigest() + '"'
     updater = Updater(path, runner=runner)
@@ -322,7 +322,7 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
                 return self.send_bytes(html.encode('utf-8'), 'text/html; charset=utf-8')
             if route in ('/assets/market.js','/assets/entry.js','/assets/nav.js','/assets/research.js','/assets/product-analysis.js'):
                 name = {'/assets/market.js':'市场看板.js','/assets/entry.js':'账户录入.js','/assets/nav.js':'页面导航.js','/assets/research.js':'投研看板.js','/assets/product-analysis.js':'产品分析.js'}[route]
-                body = 路径.资源路径('看板应用/源码/'+name).read_bytes()
+                body = 路径.资源路径('源码/'+name).read_bytes()
                 return self.send_bytes(body,'text/javascript; charset=utf-8',cache='no-cache')
             if route == '/assets/echarts.min.js':
                 if self.headers.get('If-None-Match') == chart_etag:
