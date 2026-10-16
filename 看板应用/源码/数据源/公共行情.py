@@ -139,7 +139,7 @@ def parse_sina(text, symbols):
     return out
 
 
-def fetch_quotes(symbols):
+def _fetch_public_quotes(symbols):
     symbols=list(dict.fromkeys(symbols))
     if len(symbols)>50:raise ValueError('跟踪产品超过50项')
     rows={}
@@ -157,6 +157,25 @@ def fetch_quotes(symbols):
         try:rows.update(parse_sina(request('https://hq.sinajs.cn/list='+','.join(codes),encoding='gb18030'),missing))
         except (OSError,ValueError) as exc:errors.append(type(exc).__name__)
     if not rows:raise ValueError('无有效报价 '+','.join(errors))
+    return rows
+
+
+def fetch_quotes(symbols):
+    """华泰已配置则优先报价；公开源保留补充字段、独立时间核对及失败回退。"""
+    from . import 华泰 as ht
+    symbols=list(dict.fromkeys(symbols))
+    if len(symbols)>50:raise ValueError('跟踪产品超过50项')
+    primary,state=ht.fetch(symbols,{})
+    try:references=_fetch_public_quotes(symbols)
+    except (OSError,ValueError):references={}
+    rows=dict(references)
+    for symbol,row in primary.items():
+        rows[symbol]=ht.normalized(symbol,{'data':row['primary_response']},references.get(symbol))
+    for symbol,row in rows.items():
+        row['routing']={'primary':'华泰Skill','used_primary':symbol in primary,
+            'primary_status':state['status'],
+            'fallback_reason':None if symbol in primary else ('该市场/产品未取得华泰结构化报价' if state['status']!='not_configured' else state['reason'])}
+    if not rows:raise ValueError('华泰与公开补充源均未返回有效报价')
     return rows
 
 

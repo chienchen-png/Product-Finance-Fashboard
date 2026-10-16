@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """只读行情兼容层：报价快照与K线合并；绝不查询比赛账户或提交委托。
 
-实际采集由`市场同步`完成（公开接口）；本模块保留台账命令与测试使用的稳定入口。
+实际采集由`市场同步`完成（华泰优先、公开源补充）；保留台账命令与测试稳定入口。
 """
 from decimal import Decimal, InvalidOperation
 
@@ -35,7 +35,7 @@ def quote_snapshot(payload):
 
 
 def fetch_quotes(positions):
-    """公共批量报价转旧账户字段；华泰认证不再是看板必需依赖。"""
+    """共享报价路由转旧账户字段；无华泰认证时保留公开补充源。"""
     from 数据源.公共行情 import fetch_quotes as fetch_public
     keys = [p['key'] for p in positions]
     rows = fetch_public(keys)

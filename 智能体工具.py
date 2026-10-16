@@ -94,7 +94,7 @@ def main(argv=None):
     for name in ('start', 'health', 'show', 'refresh'):
         sub.add_parser(name)
     m = sub.add_parser('market')
-    m.add_argument('--section', choices=['overview', 'sectors', 'ranks', 'news', 'nav'], default='overview')
+    m.add_argument('--section', choices=['overview', 'sectors', 'ranks', 'news', 'nav', 'huatai'], default='overview')
     m.add_argument('--product-type', choices=['stock', 'etf', 'lof'], default='stock')
     m.add_argument('--sort', choices=['up', 'down', 'amount', 'turnover'], default='up')
     m.add_argument('--symbol')

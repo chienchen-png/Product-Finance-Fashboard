@@ -434,7 +434,10 @@ def create_server(path=DEFAULT, port=8765, runner=run_sync):
                     raise ValueError('invalid_body')
                 payload = json.loads(self.rfile.read(size))
                 updater.command(payload.get('action'), payload.get('client'), payload.get('interval', 5))
-                if payload.get('action')=='refresh':shared_market.collector(path).request_refresh()
+                if payload.get('action')=='refresh':
+                    shared_market.collector(path).request_refresh()
+                    import 华泰资料
+                    华泰资料.request(path)
                 return self.send_json(updater.state(payload.get('client')))
             except (ValueError, TypeError, json.JSONDecodeError):
                 return self.send_json({'error': 'invalid_request'}, 400)

@@ -14,7 +14,7 @@ from 数据源 import 公共行情 as public, 东方财富 as east
 from 数据契约 import product_meta, normalize_cached_series
 from zoneinfo import ZoneInfo
 
-SECTIONS={'overview','ranks','sectors','flows','news','nav','announcements'}
+SECTIONS={'overview','ranks','sectors','flows','news','nav','announcements','huatai'}
 _engines={}
 _engine_lock=threading.Lock()
 _cache_write_lock=threading.RLock()
@@ -23,8 +23,8 @@ _cache_write_lock=threading.RLock()
 def capabilities():
     """默认启用集；只列本机重复取数并核验过的能力，不从研究矩阵自动启用。"""
     return dict(sectors=['industry'],sector_main_net=False,flows=False,announcements=False,
-        nav=True,kline_sources=['腾讯网页K线'],quote_sources=['腾讯网页行情','新浪网页行情'],
-        ranks=['stock','etf','lof'],news=True)
+        nav=True,kline_sources=['腾讯网页K线'],quote_sources=['华泰Skill getQuote','腾讯网页行情','新浪网页行情'],
+        ranks=['stock','etf','lof'],news=True,huatai_research=True)
 
 
 def account_path(data_root):
@@ -247,16 +247,18 @@ class Collector:
             _store_section(self.path,key,prior)
             return prior
 
-    def _quotes(self):
+    def _quotes(self,force=False):
         tracked=tracked_products(self.path)
         old=core.load_cache(self.path).get('quotes',{})
         needed=[];quotes={}
         for row in tracked:
             symbol=row['symbol'];prior=old.get(symbol,{}).get('normalized_quote')
-            stamp=(prior or {}).get('source_as_of') or (prior or {}).get('retrieved_at')
+            stamp=(prior or {}).get('source_as_of')
             local_stamp=datetime.fromisoformat(stamp).astimezone(ZoneInfo(product_meta(symbol)['timezone'])) if stamp else None
             final=local_stamp and local_stamp.date().isoformat()==session_key(symbol) and local_stamp.hour>=product_meta(symbol)['close_hour']
-            if prior and market_state(symbol)=='closed' and final:
+            from 数据源 import 华泰 as ht
+            policy_changed=ht.configured() and (prior or {}).get('routing',{}).get('primary')!='华泰Skill'
+            if prior and market_state(symbol)=='closed' and final and not force and not policy_changed:
                 quotes[symbol]=prior
             else:needed.append(symbol)
         if needed:quotes.update(public.fetch_quotes(needed))
@@ -274,7 +276,9 @@ class Collector:
         rows=[]
         for r in tracked:
             if r['symbol'] in quotes:rows.append(dict(quotes[r['symbol']],product_type=r.get('product_type'),display_name=r.get('name')))
-        return dataset('overview',rows,'腾讯/新浪',coverage={'requested':len(tracked),'returned':len(rows),'complete':len(rows)==len(tracked)})
+        sources=' / '.join(dict.fromkeys(q.get('source','未知') for q in rows))
+        return dataset('overview',rows,sources,coverage={'requested':len(tracked),'returned':len(rows),'complete':len(rows)==len(tracked),
+            'huatai':sum(q.get('routing',{}).get('used_primary',False) for q in rows)})
 
     def kline(self,symbol,period='day',adjustment='raw'):
         validate_symbol(symbol)
@@ -300,7 +304,7 @@ class Collector:
             with self._requests_lock:
                 force=force or self._force_next;self._force_next=False
             jobs={
-                'overview':(self._quotes,60),
+                'overview':(lambda:self._quotes(force),60),
                 'news':(lambda:public.fetch('news',{}),300),
                 'sectors:industry':(lambda:public.fetch('sectors',{'group':'industry'}),300)}
             for product in ('stock','etf','lof'):

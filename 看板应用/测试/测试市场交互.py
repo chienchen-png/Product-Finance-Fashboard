@@ -89,6 +89,8 @@ class MarketBrowserTests(unittest.TestCase):
             fixtures['sectors:industry']['data'][-1]['change_pct']=None
             fixtures['news']['data'] += [dict(fixtures['news']['data'][0],id=f'n{i}',title=f'市场快讯{i}') for i in range(99)]
             for k,v in fixtures.items():market._store_section(p,k,v)
+            market._store_section(p,'huatai',dataset('huatai',[dict(id='indicators',title='技术指标与产品资金',
+                answer='### 华泰样本\n| 指标 | 数值 |\n| --- | --- |\n| RSI | 58 |\n<script>不执行</script>',retrieved_at=now)],'华泰Skill',status='unknown'))
             cache=core.load_cache(p)
             cache['series']={'SH:510300':{'name':'测试产品','day':dict(bars=[['2026-10-14','4.2','4.242','4.3','4.1','100','424']],columns=['time','open','close','high','low','volume','amount'],adjustment='raw',volume_unit='shares',amount_unit='CNY')}}
             core.save_cache(p,cache)
@@ -110,6 +112,10 @@ class MarketBrowserTests(unittest.TestCase):
                     self.assertGreater(page.locator('#sector-panel').bounding_box()['width'],page.locator('#rank-panel').bounding_box()['width']*1.5)
                     self.assertIn('纳斯达克100',page.locator('#index-strip').inner_text())
                     self.assertEqual(page.locator('#flow-chart').count(),0)
+                    self.assertTrue(page.locator('#huatai-panel').is_visible())
+                    page.locator('#huatai-docs summary').click()
+                    self.assertEqual(page.locator('#huatai-docs table').count(),1)
+                    self.assertEqual(page.locator('#huatai-docs script').count(),0)
                     self.assertEqual(page.locator('#sector-type option[value="concept"]').count(),0)
                     page.wait_for_function("document.getElementById('sector-rows').textContent.includes('测试板块')")
                     map_height=page.locator('#sector-panel').bounding_box()['height']

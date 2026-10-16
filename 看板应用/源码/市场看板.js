@@ -42,9 +42,29 @@
     }
   }
   async function news(){const ds=await read('news');stamp('news-state',ds);$('news-panel').hidden=!(ds.data||[]).length||ds.error_kind==='permission';if($('news-panel').hidden)return;replaceHTML('news-list',links(ds.data||[]))}
+  function researchMarkdown(value){
+    const lines=String(value||'').split('\n');let output='',table=false;
+    const inline=s=>esc(s).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+    for(const line of lines){
+      if(/^\s*\|/.test(line)){
+        if(/^\s*\|[\s:|\-]+\|?\s*$/.test(line))continue;
+        if(!table){output+='<div class="scroll"><table>';table=true}
+        output+='<tr>'+line.trim().replace(/^\||\|$/g,'').split('|').map(c=>'<td>'+inline(c.trim())+'</td>').join('')+'</tr>';continue;
+      }
+      if(table){output+='</table></div>';table=false}
+      output+=/^#{1,6}\s/.test(line)?'<h3>'+inline(line.replace(/^#{1,6}\s+/,''))+'</h3>':line.trim()?'<p>'+inline(line)+'</p>':'';
+    }
+    return output+(table?'</table></div>':'');
+  }
+  async function huatai(){
+    const ds=await read('huatai');$('huatai-panel').hidden=!(ds.data||[]).length;if($('huatai-panel').hidden)return;
+    $('huatai-state').textContent=(ds.pending?'后台更新中':'取数 '+date(ds.retrieved_at))+(ds.errors?.length?' · 部分未更新':'');
+    const open=new Set([...document.querySelectorAll('#huatai-docs details[open]')].map(x=>x.dataset.topic));
+    replaceHTML('huatai-docs',(ds.data||[]).map(v=>`<details class="research-doc" data-topic="${esc(v.id)}" ${open.has(v.id)?'open':''}><summary>${esc(v.title)} · ${esc(date(v.retrieved_at))}</summary><div class="research-body">${researchMarkdown(v.answer)}</div></details>`).join(''));
+  }
   let detailRevision='';
   async function update(){if(busy||!d)return;busy=true;try{
-    if(active==='market'){await Promise.allSettled([overview(),ranks(),sectors(),news()]);$('market-empty').hidden=Boolean($('index-strip').querySelector('.index-card')||document.querySelector('.market-grid>.panel:not([hidden])'))}
+    if(active==='market'){await Promise.allSettled([overview(),ranks(),sectors(),news(),huatai()]);$('market-empty').hidden=Boolean($('index-strip').querySelector('.index-card')||document.querySelector('.market-grid>.panel:not([hidden])'))}
     if(opened&&$('product-dialog').open){
       const state=kv[opened.key],has=state&&klineCache.get(opened.key)?.[state.g];
       if(!has||detailRevision!==d.kline_revision){
