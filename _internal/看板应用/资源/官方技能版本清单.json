@@ -1,0 +1,61 @@
+{
+  "核验日期": "2026-10-10",
+  "安装说明": "https://d.zhangle.com/nzl/allinone/skills/docs/1780588800000/htsc-skills-bundle_INSTALL_906388591.md",
+  "技能包": [
+    {
+      "名称": "query-indicator",
+      "来源": "https://d.zhangle.com/nzl/allinone/skills/docs/1780588800000/query-indicator_763636519.zip",
+      "压缩包SHA256": "c23e27719649dbb018be5073cc248f9184f454b0006e8c9c2be39f1eb65405c5",
+      "文件": {
+        ".env.example": "f2d9df02ae222801ee9202c9d93c7893b04dc6b22f83d57e27ecff7b37b9bbe6",
+        "query_indicator.py": "337390819dfa533dab9591a63935e0fe0b7e314ce095518a9c0a5b8ef5d950c4",
+        "README.md": "0afc3607c77723ceccf54498c1d4f471f86692ba25eb3943c7390d876eebc1d7",
+        "SKILL.md": "ea43fbd47d183b74745de6f2c4e0bbcba41166f61583298ef5d9d9bbbadf0994"
+      }
+    },
+    {
+      "名称": "financial-analysis",
+      "来源": "https://d.zhangle.com/nzl/allinone/skills/docs/1780588800000/financial-analysis_473880149.zip",
+      "压缩包SHA256": "e53b07cfa22d52dc641090de3ee87714c8b576f8deea3fa743febda82d0d8064",
+      "文件": {
+        ".env.example": "1b404c3ac457306301d912791e9251d0c12b5acf984f164c6bf5a65c20dd6f28",
+        "financial_analysis.py": "6efc509713d1babd6098b35ea3735d17bd389c5c14cc61f4f8ce6d54be492d6e",
+        "README.md": "675394b6f45352f2fd6e3466fd630520d3743ab998582f3f485b3a9ec20e02aa",
+        "references/CATEGORIES.md": "f5c7a43b5a6428ea6adbcedc8947c1733ca3b8bf6a6eec8116610c41d9d12c5c",
+        "SKILL.md": "0e9ab0065358f0b3b8033e37f08a31b2e2d83deb8388931fb298553d6b3f651e"
+      }
+    },
+    {
+      "名称": "a-share-paper-trading",
+      "来源": "https://d.zhangle.com/nzl/allinone/skills/docs/1780588800000/a-share-paper-trading_140059101.zip",
+      "压缩包SHA256": "1109dae34329bd3de27647c457b67d5496df64d0dc6ecffbca03424074338932",
+      "文件": {
+        ".env.example": "eb37bc28726ceb2d90f57a783cc5fc6e1acc8517ce81ed3bae87b6094633a262",
+        "a_share_paper_trading.py": "88beb16683486194cc98f222e18a1935ebba07f5519a38fb20a0917370aff171",
+        "README.md": "b79ede44ff096c71c2eb4af3c085ccf25458496cd8b0354222fb2701d0199566",
+        "SKILL.md": "464b3ec5730a41fa3bbc5193012063f75948d9c13505ba2c1fd80c48abbac601"
+      }
+    },
+    {
+      "名称": "select-stock",
+      "来源": "https://d.zhangle.com/nzl/allinone/skills/docs/1780588800000/select-stock_506098113.zip",
+      "压缩包SHA256": "0aefb613dbc9812ee4bcca3d984afe7f8c69ff1905d63fca417c85e3d3265be8",
+      "文件": {
+        "README.md": "55472ccefd9f3ccda425ec143ccc2b71867b2fb970e2c8101ccb67dd56a0b3ef",
+        "select_stock.py": "cb5e3d274efa154ae3008eeae5904e75e941aaaab0acd1507c867a82b53a9bb8",
+        "SKILL.md": "f3794316f23f2652ae0d985668ffcb3a24abaad66d818c853011da3b85b2b39f"
+      }
+    },
+    {
+      "名称": "watchlist-management",
+      "来源": "https://d.zhangle.com/nzl/allinone/skills/docs/1780588800000/watchlist-management_444870522.zip",
+      "压缩包SHA256": "e529dba92b1f192bc224808c843d39a6c8d615bd07408974a43894f32d0b493c",
+      "文件": {
+        "README.md": "a0803bae8aebbfdf7c188a7b8cd7577152a0a221f64ee649f584a6c0a1ab32e1",
+        "SKILL.md": "3bb501ec244227b8626bcfe9517d7df36483ff3092300627869081effdbb5da9",
+        "watchlist_management.py": "cc9397a9ae76de40b9fd31b84188a7a72650f653f1a5781509be5726b57f5455"
+      }
+    }
+  ],
+  "安装位置说明": "设备用户目录，项目不携带官方技能文件或ZIP。"
+}

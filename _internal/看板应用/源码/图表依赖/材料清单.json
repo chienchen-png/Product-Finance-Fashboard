@@ -1,0 +1,23 @@
+{
+  "组件": "Apache ECharts",
+  "版本": "6.0.0",
+  "下载来源": "https://cdn.jsdelivr.net/npm/echarts@6.0.0/",
+  "官方项目": "https://github.com/apache/echarts",
+  "文件": [
+    {
+      "文件": "echarts.min.js",
+      "字节": 1117939,
+      "sha256": "baa8dfe7e1d9336b98e8986ba7e20ea15e7cdbea1ef42a59d59478632fa45a1d"
+    },
+    {
+      "文件": "LICENSE",
+      "字节": 11990,
+      "sha256": "634293835b43a6dd2094fa39182a3d9a6b9ca43b7fdb9ac354e8037af2a3093a"
+    },
+    {
+      "文件": "NOTICE",
+      "字节": 168,
+      "sha256": "dc0d9176413c3d96d0ac40b39b1dbb11e3043b7b010be560f5dfe66bd3774ae1"
+    }
+  ]
+}
