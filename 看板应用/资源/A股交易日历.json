@@ -1,0 +1,31 @@
+{
+  "market": "A股常规竞价",
+  "timezone": "Asia/Shanghai",
+  "valid_from": "2026-01-01",
+  "valid_to": "2026-12-31",
+  "sources": {
+    "holidays": "https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml",
+    "sessions": "https://one.sse.com.cn/onething/gptz/"
+  },
+  "holidays": [
+    {"from": "2026-01-01", "to": "2026-01-03", "name": "元旦"},
+    {"from": "2026-02-15", "to": "2026-02-23", "name": "春节"},
+    {"from": "2026-04-04", "to": "2026-04-06", "name": "清明节"},
+    {"from": "2026-05-01", "to": "2026-05-05", "name": "劳动节"},
+    {"from": "2026-06-19", "to": "2026-06-21", "name": "端午节"},
+    {"from": "2026-09-25", "to": "2026-09-27", "name": "中秋节"},
+    {"from": "2026-10-01", "to": "2026-10-07", "name": "国庆节"}
+  ],
+  "phases": [
+    {"start": "00:00", "end": "09:15", "label": "开盘前", "active": false, "next": "距集合竞价"},
+    {"start": "09:15", "end": "09:25", "label": "开盘集合竞价", "active": true, "next": "距竞价结束"},
+    {"start": "09:25", "end": "09:30", "label": "撮合暂停", "active": false, "next": "距连续竞价"},
+    {"start": "09:30", "end": "11:30", "label": "连续竞价", "active": true, "next": "距午休"},
+    {"start": "11:30", "end": "13:00", "label": "午间休市", "active": false, "next": "距下午开盘"},
+    {"start": "13:00", "end": "14:57", "label": "连续竞价", "active": true, "next": "距收盘阶段"},
+    {"start": "14:57", "end": "15:00", "label": "收盘阶段", "active": true, "next": "距收盘"},
+    {"start": "15:00", "end": "24:00", "label": "已收盘", "active": false, "next": "距下次开盘"}
+  ],
+  "poll_windows": [["09:15", "11:35"], ["13:00", "15:05"]],
+  "scope": "沪深A股常规竞价时段；不判断个股停牌、账户权限、资金、T+1及手机系统委托受理；不覆盖港股通或特殊盘后交易。"
+}
