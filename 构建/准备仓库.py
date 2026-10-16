@@ -10,6 +10,8 @@ def prepare(app, target):
     def copy(source, relative):
         dest = target / relative
         dest.parent.mkdir(parents=True, exist_ok=True)
+        if source.resolve() == dest.resolve():
+            return
         shutil.copy2(source, dest)
     def seed(*candidates):
         """同一份资料在本人项目（构建内）与独立仓库（根目录）位置不同，取第一个存在的。"""
@@ -36,6 +38,7 @@ def prepare(app, target):
         copy(source, '测试/' + source.name)
     for name in ('构建发布.ps1', '比赛看板.spec', '看板图标.ico', '准备仓库.py'):
         copy(app / '构建' / name, '构建/' + name)
+    copy(seed('配置.json'), '配置.json')
     copy(seed('构建/发布说明.md', 'README.md'), 'README.md')
     copy(seed('构建/开源许可.txt', 'LICENSE'), 'LICENSE')
     (target / '.gitignore').write_text('数据/\n**/数据/\n*.log\n*.log.1\n*.预览.json\n*成交.json\n*快照.json\n__pycache__/\n.venv/\n构建缓存/\n发布/\n', encoding='utf-8')

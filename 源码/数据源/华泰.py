@@ -16,9 +16,25 @@ _blocked_until=0.0
 _key_tag=None
 
 
+def 程序配置():
+    """程序目录共享配置：独立仓库或安装目录下的`配置.json`。"""
+    import sys
+    if getattr(sys,'frozen',False):
+        return Path(sys.executable).parent/'配置.json'
+    return Path(__file__).resolve().parents[2]/'配置.json'
+
+
 def key():
+    """密钥优先级：环境变量 > 程序目录配置.json > 用户目录.htsc-skills/config。"""
     value=os.environ.get('HT_APIKEY','').strip()
     if value:return value
+    path=程序配置()
+    if path.is_file():
+        try:
+            value=str(json.loads(path.read_text(encoding='utf-8')).get('HT_APIKEY') or '').strip()
+        except (OSError,ValueError,AttributeError,TypeError):
+            value=''
+        if value:return value
     path=Path.home()/'.htsc-skills/config'
     if path.is_file():
         for line in path.read_text(encoding='utf-8').splitlines():

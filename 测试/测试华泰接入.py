@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'源码'))
 import json
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -19,6 +20,23 @@ class HuataiTests(unittest.TestCase):
             limitUp=1.333,limitDown=1.091,bidPrice1=1.219,askPrice1=1.22,isSuspended=False)}
         self.reference=public.quote('SH:512890','测试ETF','1.219')
         self.reference.update(source='腾讯网页行情',source_as_of=core.now(),prev_close='1.212',amount='2000',amount_unit='CNY')
+
+    def test_key_precedence_env_over_program_config_over_user_config(self):
+        """密钥优先级：环境变量 > 程序目录配置.json > 用户目录.htsc-skills/config。"""
+        with tempfile.TemporaryDirectory() as folder:
+            配置=Path(folder)/'配置.json';配置.write_text(json.dumps({'HT_APIKEY':'程序密钥'}),encoding='utf-8')
+            用户配置=Path(folder)/'.htsc-skills/config';用户配置.parent.mkdir();用户配置.write_text('HT_APIKEY=用户密钥\n',encoding='utf-8')
+            空配置=Path(folder)/'没有.json'
+            with patch.object(Path,'home',return_value=Path(folder)):
+                with patch.object(ht,'程序配置',return_value=配置),patch.dict(os.environ,{'HT_APIKEY':'环境密钥'}):
+                    self.assertEqual(ht.key(),'环境密钥')
+                with patch.object(ht,'程序配置',return_value=配置),patch.dict(os.environ,{'HT_APIKEY':''}):
+                    self.assertEqual(ht.key(),'程序密钥')
+                with patch.object(ht,'程序配置',return_value=空配置),patch.dict(os.environ,{'HT_APIKEY':''}):
+                    self.assertEqual(ht.key(),'用户密钥')
+                with patch.object(ht,'程序配置',return_value=空配置),patch.dict(os.environ,{'HT_APIKEY':''}):
+                    用户配置.unlink()
+                    self.assertEqual(ht.key(),'')
 
     def test_primary_price_has_no_invented_market_time_and_keeps_field_provenance(self):
         row=ht.normalized('SH:512890',self.raw,self.reference)

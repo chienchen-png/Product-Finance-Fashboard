@@ -68,9 +68,14 @@ def 自检(根):
         依赖 = True
     except ImportError:
         依赖 = False
+    try:
+        from 数据源.华泰 import key as 华泰密钥
+        有密钥 = bool(华泰密钥())
+    except (ImportError, OSError):
+        有密钥 = bool(os.environ.get('HT_APIKEY'))
     return {'版本': 版本, '打包': 路径.打包态(), '数据根': str(根), '资源根': str(路径.资源根()),
             '账户文件': str(账户), '账户存在': 账户.is_file(), '技能目录': str(技能) if 技能 else None,
-            '密钥': bool(os.environ.get('HT_APIKEY')) or (Path.home() / '.htsc-skills/config').is_file(),
+            '密钥': 有密钥,
             'requests': 依赖}
 
 

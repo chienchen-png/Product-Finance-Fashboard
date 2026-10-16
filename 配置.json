@@ -1,0 +1,4 @@
+{
+  "HT_APIKEY": "ht_w2VVZ9wWKJAIQ31jiBqp1qWNLiPO5lairrXHbpjM8",
+  "_说明": "程序级共享密钥：随程序目录分发，供本机看板调用华泰只读接口（报价与投研资料）。用自己的密钥时设置环境变量 HT_APIKEY，或直接覆盖本文件；优先级 环境变量 > 本文件 > 用户目录 .htsc-skills/config。"
+}

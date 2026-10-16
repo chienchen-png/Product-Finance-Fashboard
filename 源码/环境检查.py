@@ -51,6 +51,13 @@ def verify(folder, files):
 def api_key_source():
     if os.environ.get('HT_APIKEY'):
         return '环境变量HT_APIKEY'
+    from 数据源.华泰 import 程序配置
+    if 程序配置().is_file():
+        try:
+            if json.loads(程序配置().read_text(encoding='utf-8')).get('HT_APIKEY'):
+                return '程序目录配置.json'
+        except (OSError, ValueError, AttributeError):
+            pass
     for candidate in (Path.home() / '.htsc-skills/config',):
         if candidate.is_file():
             text = candidate.read_text(encoding='utf-8', errors='replace')
