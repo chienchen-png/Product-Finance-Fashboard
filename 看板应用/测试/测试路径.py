@@ -7,9 +7,24 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 class ResolveTests(unittest.TestCase):
+    def test_standalone_source_uses_same_data_as_root_exe(self):
+        import 路径
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'比赛看板.exe').write_bytes(b'marker')
+            with patch.dict(os.environ,{},clear=True),patch.object(路径,'项目根',return_value=root),patch.object(路径,'打包态',return_value=False):
+                self.assertEqual(路径.数据根(),root/'数据')
+            self.assertFalse((root/'数据').exists())
+
+    def test_personal_source_keeps_personal_application_data(self):
+        import 路径
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=root/'看板应用';app.mkdir();(app/'比赛看板.exe').write_bytes(b'marker')
+            with patch.dict(os.environ,{},clear=True),patch.object(路径,'项目根',return_value=root),patch.object(路径,'应用根',return_value=app),patch.object(路径,'打包态',return_value=False):
+                self.assertEqual(路径.数据根(),app/'数据')
     def test_env_wins_over_packaging(self):
         import 路径
         with tempfile.TemporaryDirectory() as folder:

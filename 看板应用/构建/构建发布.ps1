@@ -5,17 +5,19 @@ Set-Location -LiteralPath $项目根
 function 核项目内路径([string] $路径) {
     $绝对 = [IO.Path]::GetFullPath($路径)
     $前缀 = $项目根.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-    if (-not $绝对.StartsWith($前缀, [StringComparison]::OrdinalIgnoreCase)) { throw "拒绝操作项目外路径：$绝对" }
+    if ($绝对 -ne $项目根 -and -not $绝对.StartsWith($前缀, [StringComparison]::OrdinalIgnoreCase)) { throw "拒绝操作项目外路径：$绝对" }
     return $绝对
 }
 $标识 = (Get-Date -Format 'yyyyMMdd_HHmmss') + '_' + [Guid]::NewGuid().ToString('N').Substring(0,8)
 $暂存 = 核项目内路径 (Join-Path $应用根 ('构建缓存/发布_' + $标识))
-$产物 = 核项目内路径 (Join-Path $应用根 '发布/比赛看板')
+$产物 = if (Test-Path -LiteralPath (Join-Path $项目根 '比赛看板.exe')) { $项目根 } else { 核项目内路径 (Join-Path $项目根 '比赛看板开源') }
+$本人运行目录 = if ($应用根 -ne $产物 -and (Test-Path -LiteralPath (Join-Path $应用根 '数据/账户记录/比赛账户.json'))) { $应用根 } else { $null }
 $回滚 = 核项目内路径 (Join-Path $暂存 '回滚')
 function 确认旧看板未占用 {
-    $可执行路径 = [IO.Path]::GetFullPath((Join-Path $产物 '比赛看板.exe'))
+    $可执行路径 = @([IO.Path]::GetFullPath((Join-Path $产物 '比赛看板.exe')))
+    if ($本人运行目录) { $可执行路径 += [IO.Path]::GetFullPath((Join-Path $本人运行目录 '比赛看板.exe')) }
     $占用进程 = @(Get-Process -Name '比赛看板' -ErrorAction SilentlyContinue | Where-Object {
-        $_.Path -and [IO.Path]::GetFullPath($_.Path) -eq $可执行路径
+        $_.Path -and [IO.Path]::GetFullPath($_.Path) -in $可执行路径
     })
     if ($占用进程.Count -gt 0) { throw '看板正在运行；请关闭旧看板，等待服务退出后重新构建。原包未改变。' }
 }
@@ -73,6 +75,37 @@ try {
         }
     }
     throw
+}
+# 本人程序单独安装；不复制、搬移或重建任何账户数据。
+if ($本人运行目录) {
+    $本人暂存 = 核项目内路径 (Join-Path $暂存 '本人新版')
+    $本人回滚 = 核项目内路径 (Join-Path $暂存 '本人回滚')
+    New-Item -ItemType Directory -Path $本人暂存,$本人回滚 -Force | Out-Null
+    foreach ($名称 in @('比赛看板.exe','_internal')) {
+        Copy-Item -LiteralPath (核项目内路径 (Join-Path $产物 $名称)) -Destination $本人暂存 -Recurse -Force
+    }
+    $本人已保存=@();$本人已安装=@()
+    try {
+        foreach ($名称 in @('比赛看板.exe','_internal')) {
+            $当前 = 核项目内路径 (Join-Path $本人运行目录 $名称)
+            if (Test-Path -LiteralPath $当前) {
+                Move-Item -LiteralPath $当前 -Destination (Join-Path $本人回滚 $名称)
+                $本人已保存 += $名称
+            }
+            Move-Item -LiteralPath (核项目内路径 (Join-Path $本人暂存 $名称)) -Destination $当前
+            $本人已安装 += $名称
+        }
+    } catch {
+        $本人失败 = 核项目内路径 (Join-Path $暂存 '本人失败安装')
+        New-Item -ItemType Directory -Path $本人失败 -Force | Out-Null
+        foreach ($名称 in $本人已安装) {
+            Move-Item -LiteralPath (核项目内路径 (Join-Path $本人运行目录 $名称)) -Destination $本人失败
+        }
+        foreach ($名称 in $本人已保存) {
+            Move-Item -LiteralPath (核项目内路径 (Join-Path $本人回滚 $名称)) -Destination (核项目内路径 (Join-Path $本人运行目录 $名称))
+        }
+        throw '开源目录已更新；本人程序更新失败，已恢复旧程序，个人数据未改'
+    }
 }
 Remove-Item -LiteralPath (核项目内路径 $暂存) -Recurse -Force
 $大小 = (Get-ChildItem -LiteralPath $产物 -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB

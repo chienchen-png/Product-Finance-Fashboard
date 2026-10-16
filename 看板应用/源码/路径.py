@@ -33,7 +33,7 @@ def 资源根():
 def 解析数据根(环境值=None, 打包=None, exe目录=None, 源码根目录=None):
     """纯函数：按环境值、打包位置、源码根依次解析，不创建目录。
 
-    打包态只用exe同级数据，不扫描父目录。项目启动器用环境变量显式指定个人账本。
+    打包态只用exe同级数据，不扫描父目录。
     源码态固定使用应用目录内的数据。
     """
     if 环境值:
@@ -50,6 +50,9 @@ def 数据根():
     override = os.environ.get(环境键)
     if override:
         return Path(override).expanduser()
+    # 独立源码仓库与其根目录EXE使用同一份本机数据；本人项目源码使用应用目录数据。
+    if not 打包态() and (项目根()/'比赛看板.exe').is_file():
+        return 项目根()/'数据'
     return 解析数据根(None, 源码根目录=应用根())
 
 

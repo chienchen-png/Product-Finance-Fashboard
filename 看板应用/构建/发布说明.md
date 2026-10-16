@@ -58,7 +58,7 @@ python -X utf8 智能体工具.py kline SH:510300
 python -X utf8 智能体工具.py refresh
 ```
 
-工具默认匹配本目录`数据`的服务，先看`health`的`data_root`确认账户。自定义目录用环境变量`看板数据目录`；选择特定实例可加前置参数`--url http://127.0.0.1:8765`。`refresh`异步提交更新请求，返回不代表采集完成，之后重读数据时间和状态。
+每份软件使用自己根目录的`数据`，不需要切换数据库。工具默认匹配该目录的服务；`health`的`data_root`用于核对。显式指定服务可加前置参数`--url http://127.0.0.1:8765`。`refresh`异步返回，之后重读数据时间和状态。
 
 ### 登记确认成交
 
@@ -154,12 +154,11 @@ README.md / AGENTS.md      人与智能体入口
 
 ```powershell
 python -m pip install -r requirements-dev.txt
-$env:看板数据目录 = Join-Path (Get-Location) '数据'
 python -X utf8 看板应用/源码/启动器.py
 python -X utf8 看板应用/测试/运行全部测试.py
 powershell -NoProfile -ExecutionPolicy Bypass -File 看板应用/构建/构建发布.ps1
 ```
 
-浏览器测试需本机Edge，个别构建测试需PowerShell 7（pwsh）。构建前关闭对应发布目录的运行程序，产物在`看板应用/发布/比赛看板`，不生成压缩包。源码仅包含通用看板及计算工具，不含作者个人研究、账户或策略参数。
+浏览器测试需本机Edge，个别构建测试需PowerShell 7（pwsh）。源码启动与根目录EXE读取同一份本机数据。构建前关闭对应程序：在独立仓库中构建会更新根目录程序；在作者主项目构建会更新独立`比赛看板开源`目录，并同步本人程序文件，始终保留两边数据。不生成压缩包。
 
 上传时以**本目录为仓库根**，提交源码及运行文件；检查`git status`，排除`数据/`、临时成交/快照文件与票据。代码采用MIT许可，图表与依赖保留各自许可。迁移备份整个`数据/`；故障看`数据/看板服务.log`，不要修改`_internal`。
